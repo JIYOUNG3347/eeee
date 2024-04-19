@@ -46,57 +46,73 @@ def make_segmentation_masks(img_results, image_np):
 # 컨투어에 대한 중심 찾기 및 그리기
 def detect_centroid(rgb_image, mask_image, drawImg):
     centroids = []
-    ret, binary = cv2.threshold(mask_image, 150, 255, cv2.THRESH_BINARY_INV)
-    contours, hierarchy = cv2.findContours(binary, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
-    M = cv2.moments(contours[0])
-    if M["m00"] != 0:
-        cx = int(M["m10"] / M["m00"])
-        cy = int(M["m01"] / M["m00"])
-        centroids.append((cx, cy))
-        if drawImg:
-            cv2.drawContours(rgb_image, contours[0], -1, (0, 255, 0), 3)
-            cv2.circle(rgb_image, (cx, cy), 3, (255, 0, 255), 3)
-            cv2.putText(rgb_image, text=f"centroid at {cx}, {cy}", org=(cx, cy), fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                        fontScale=0.5, thickness=1, color=(255, 0, 255))
-    return np.hstack([rgb_image, np.repeat(mask_image[..., np.newaxis], 3, -1)]), centroids
+
+    # 마스크 이미지가 전부 0인지 확인
+    if np.any(mask_image):
+        ret, binary = cv2.threshold(mask_image, 150, 255, cv2.THRESH_BINARY_INV)
+        contours, hierarchy = cv2.findContours(binary, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+
+        # 적어도 하나의 유효한 컨투어가 있는지 확인
+        if contours:
+            M = cv2.moments(contours[0])
+            if M["m00"] != 0:
+                cx = int(M["m10"] / M["m00"])
+                cy = int(M["m01"] / M["m00"])
+                centroids.append((cx, cy))
+
+                if drawImg:
+                    cv2.drawContours(rgb_image, contours[0], -1, (0, 255, 0), 3)
+                    cv2.circle(rgb_image, (cx, cy), 3, (255, 0, 255), -1)
+                    cv2.putText(rgb_image, text=f"centroid at {cx}, {cy}", org=(cx, cy),
+                                fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                                fontScale=0.5, thickness=1, color=(255, 0, 255))
+
+    merged_image = np.hstack([rgb_image, np.repeat(mask_image[..., np.newaxis], 3, axis=-1)])
+    return merged_image, centroids
 
 
 # 이미지 모멘트 없이 중심 찾기 및 그리기
 def compute_centroid_via_pixels_and_draw(rgb_image, mask_image, drawImg=True):
-    Y, X = np.nonzero(mask_image)
-    if len(X) == 0 or len(Y) == 0:
-        return None
-    centroid_x = int(np.mean(X))
-    centroid_y = int(np.mean(Y))
-    if drawImg:
-        cv2.circle(rgb_image, (centroid_x, centroid_y), 5, (255, 0, 255), -1)
-        cv2.putText(rgb_image, f"({centroid_x},{centroid_y})", (centroid_x, centroid_y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
+    # 마스크 이미지가 전부 0인지 확인
+    if np.any(mask_image):
+        Y, X = np.nonzero(mask_image)
+        if len(X) == 0 or len(Y) == 0:
+            return None
+        centroid_x = int(np.mean(X))
+        centroid_y = int(np.mean(Y))
+        if drawImg:
+            cv2.circle(rgb_image, (centroid_x, centroid_y), 5, (255, 0, 255), -1)
+            cv2.putText(rgb_image, f"({centroid_x},{centroid_y})", (centroid_x, centroid_y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
     return np.hstack([rgb_image, np.repeat(mask_image[..., np.newaxis], 3, -1)]), (centroid_x, centroid_y)
 
 # 바이너리 이미지의 바운딩 박스를 사용하여 중심 찾기 및 그리기
 def compute_centroid_via_bbox_and_draw(rgb_image, mask_image, drawImg=True):
-    ret, thresh = cv2.threshold(mask_image, 150, 255, cv2.THRESH_BINARY)
-    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     centroids = []
-    for cnt in contours:
-        x, y, w, h = cv2.boundingRect(cnt)
-        cx, cy = x + w//2, y + h//2
-        centroids.append((cx, cy))
-        if drawImg:
-            cv2.rectangle(rgb_image, (x, y), (x+w, y+h), (0, 255, 0), 2)
-            cv2.circle(rgb_image, (cx, cy), 5, (255, 0, 255), -1)
-            cv2.putText(rgb_image, f"({cx},{cy})", (cx, cy-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
+    if np.any(mask_image):
+        ret, thresh = cv2.threshold(mask_image, 150, 255, cv2.THRESH_BINARY)
+        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        for cnt in contours:
+            x, y, w, h = cv2.boundingRect(cnt)
+            cx, cy = x + w//2, y + h//2
+            centroids.append((cx, cy))
+            if drawImg:
+                cv2.rectangle(rgb_image, (x, y), (x+w, y+h), (0, 255, 0), 2)
+                cv2.circle(rgb_image, (cx, cy), 5, (255, 0, 255), -1)
+                cv2.putText(rgb_image, f"({cx},{cy})", (cx, cy-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
     return np.hstack([rgb_image, np.repeat(mask_image[..., np.newaxis], 3, -1)]), centroids
 
 
 # OpenCV 함수 cv2.connectedComponentsWithStats() 사용하여 중심 찾기 및 그리기
 def find_centroids_with_stats_and_draw(rgb_image, mask_image, drawImg=True):
-    num_labels, labels_im, stats, centroids = cv2.connectedComponentsWithStats(mask_image, connectivity=8, ltype=cv2.CV_32S)
-    for i in range(1, num_labels):  # label 0 is the background
-        cx, cy = int(centroids[i][0]), int(centroids[i][1])
-        if drawImg:
-            cv2.circle(rgb_image, (cx, cy), 5, (255, 0, 255), -1)
-            cv2.putText(rgb_image, f"({cx},{cy})", (cx, cy-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
+    centroids = None
+    if np.any(mask_image):
+        num_labels, labels_im, stats, centroids = cv2.connectedComponentsWithStats(mask_image, connectivity=8, ltype=cv2.CV_32S)
+        for i in range(1, num_labels):  # label 0 is the background
+            cx, cy = int(centroids[i][0]), int(centroids[i][1])
+            if drawImg:
+                cv2.circle(rgb_image, (cx, cy), 5, (255, 0, 255), -1)
+                cv2.putText(rgb_image, f"({cx},{cy})", (cx, cy-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
     return np.hstack([rgb_image, np.repeat(mask_image[..., np.newaxis], 3, -1)]), centroids[1:]
 
 
