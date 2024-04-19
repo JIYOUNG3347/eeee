@@ -120,8 +120,8 @@ if __name__ == "__main__":
             left_annotated_frame = left_results[0].plot()
             right_annotated_frame = right_results[0].plot()
 
-            left, center = detect_centroid(left_image_np, left_mask, True)
-            right, center = detect_centroid(right_image_np, right_mask, True)
+            left, left_center = detect_centroid(left_image_np, left_mask, True)
+            right, right_center = detect_centroid(right_image_np, right_mask, True)
 
             cv2.imshow("Left Inference", left)
             cv2.imshow("Right Inference", right)
